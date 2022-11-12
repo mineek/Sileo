@@ -2,11 +2,14 @@ on:
   push:
     branches:
       - dev
+  workflow_dispatch:
+  
 name: Build
 jobs:
   make:
     name: Build and Upload Sileo
     runs-on: macos-12
+    
     steps:
       - uses: actions/cache@v2
         id: procache
@@ -17,33 +20,6 @@ jobs:
           
       - name: Checkout
         uses: actions/checkout@master
-        with:
-          submodules: recursive
-          token: ${{ secrets.SILEO_PAT }}
-      - name: Import all certificates
-        env: 
-          DEVELOPMENT_PASSWORD: ${{ secrets.DEVELOPMENT_PASSWORD }}
-          DEVELOPMENT_CERTIFICATE: ${{ secrets.DEVELOPMENT_CERTIFICATE }}
-          DISTRIBUTION_CERTIFICATE: ${{ secrets.DISTRIBUTION_CERTIFICATE }}
-          DISTRIBUTION_PASSWORD: ${{ secrets.DISTRIBUTION_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          security create-keychain -p "" build.keychain
-          security list-keychains -s build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "" build.keychain
-          security set-keychain-settings
-          security import <(echo $DEVELOPMENT_CERTIFICATE | base64 --decode) \
-                          -f pkcs12 \
-                          -k build.keychain \
-                          -P $DEVELOPMENT_PASSWORD \
-                          -T /usr/bin/codesign
-          security import <(echo $DISTRIBUTION_CERTIFICATE | base64 --decode) \
-                          -f pkcs12 \
-                          -k build.keychain \
-                          -P $DISTRIBUTION_PASSWORD \
-                          -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
         
       - name: Setup Procursus Bootstrap (install)
         if: steps.procache.outputs.cache-hit != 'true'
@@ -55,6 +31,7 @@ jobs:
           sudo /opt/procursus/bin/apt -V dist-upgrade -y || :
           sudo /opt/procursus/bin/apt -V dist-upgrade -y
           sudo /opt/procursus/bin/apt install ldid -y
+          
       - name: Add Procursus to PATH
         run: |
           echo '/opt/procursus/sbin:/opt/procursus/bin' >> $GITHUB_PATH
@@ -75,31 +52,13 @@ jobs:
       - name: Build Sileo Nightly (iphoneos-arm)
         run: |
           make clean package NIGHTLY=1 DEBUG=0 ALL_BOOTSTRAPS=1
-      - name: Build Sileo Nightly (iphoneos-arm64)
-        run: |
-          make clean package NIGHTLY=1 DEBUG=0 ALL_BOOTSTRAPS=1 SILEO_PLATFORM=iphoneos-arm64
-      - name: Build Sileo Nightly (darwin-amd64)
-        run: |
-          make clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-amd64 
-      - name: Build Sileo Nightly (darwin-arm64)
-        run: |
-          make clean package NIGHTLY=1 DEBUG=0 AUTOMATION=1 SILEO_PLATFORM=darwin-arm64 
-      - name: Upload To Repo
-        env: # 
-          token: ${{ secrets.AMY_REPO_SECRET }}
-        run: |
-          package1=$(ls -t packages | head -1)
-          package2=$(ls -t packages | head -2 | tail -1)
-          package3=$(ls -t packages | head -3 | tail -1)
-          package4=$(ls -t packages | head -4 | tail -1)
-          curl -F deb="@./packages/${package1}" -H "Auth: ${token}" https://api.anamy.gay/private/repo/upload
-          curl -F deb="@./packages/${package2}" -H "Auth: ${token}" https://api.anamy.gay/private/repo/upload
-          curl -F deb="@./packages/${package3}" -H "Auth: ${token}" https://api.anamy.gay/private/repo/upload
-          curl -F deb="@./packages/${package4}" -H "Auth: ${token}" https://api.anamy.gay/private/repo/upload
-          curl -H "Auth: ${token}" https://api.anamy.gay/private/repo/repackage
-      - name: Wakeup Babe
-        run: |
-          curl -H "Content-Type: application/json" -d '{"username": "Nightly Bot", "content": "https://cdn.discordapp.com/attachments/863878431166169100/881714407313375282/image0.jpg"}' "${{ secrets.WEBHOOK }}"
+          
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3.1.0
+        with:
+          name: SileoNightly_iphoneos-arm
+          path: packages/*
+          
       - name: Copy Procursus to Cache Location
         run: |
           sudo mkdir -p ~/__cache
