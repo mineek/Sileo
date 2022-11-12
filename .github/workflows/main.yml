@@ -2,8 +2,7 @@ on:
   push:
     branches:
       - dev
-  workflow_dispatch:
-  
+      
 name: Build
 jobs:
   make:
