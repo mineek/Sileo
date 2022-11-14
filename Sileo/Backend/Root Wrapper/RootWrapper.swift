@@ -298,6 +298,27 @@ func moveFileAsRoot(from: URL, to: URL) {
     #endif
 }
 
+func getRootPath() -> String {
+    var rootPath: String? = nil
+
+    let fileManager = FileManager.default
+    let attributes = try? fileManager.attributesOfItem(atPath: "/var/jb")
+    if let attributes = attributes {
+        let fileType = attributes[FileAttributeKey.type] as! String
+        if fileType == FileAttributeType.typeSymbolicLink.rawValue {
+            let destination = try? fileManager.destinationOfSymbolicLink(atPath: "/var/jb")
+            if destination != "/jb" && destination != "/jb/" {
+                rootPath = destination
+            }
+        }
+    }
+    if rootPath == nil {
+        rootPath = "/"
+    }
+
+    return String(rootPath!.dropLast())
+}
+
 public class CommandPath {
     // Certain paths need to check for either Procursus mobile or Elucubratus as a fallback option
     // Every method that uses this check already accounts for macCatalyst paths still resolving too
@@ -313,10 +334,7 @@ public class CommandPath {
         #if targetEnvironment(macCatalyst)
         return "/opt/procursus"
         #else
-        if #available(iOS 15, *) {
-            return "/var/jb"
-        }
-        return ""
+        return getRootPath()
         #endif
     }()
 
