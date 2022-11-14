@@ -298,25 +298,15 @@ func moveFileAsRoot(from: URL, to: URL) {
     #endif
 }
 
-func getRootPath() -> String {
-    var rootPath: String? = nil
-
-    let fileManager = FileManager.default
-    let attributes = try? fileManager.attributesOfItem(atPath: "/var/jb")
-    if let attributes = attributes {
-        let fileType = attributes[FileAttributeKey.type] as! String
-        if fileType == FileAttributeType.typeSymbolicLink.rawValue {
-            let destination = try? fileManager.destinationOfSymbolicLink(atPath: "/var/jb")
-            if destination != "/jb" && destination != "/jb/" {
-                rootPath = destination
-            }
-        }
+func rootPath() -> String {
+    if let attrs = try? FileManager.default.attributesOfItem(atPath: "/var/jb"),
+       let type = attrs[.type] as? FileAttributeType,
+       type == .typeSymbolicLink,
+       let destination = try? FileManager.default.destinationOfSymbolicLink(atPath: "/var/jb")  {
+        return (destination != "/jb" && destination != "/jb/") ? destination : "/"
     }
-    if rootPath == nil {
-        rootPath = "/"
-    }
-
-    return String(rootPath!.dropLast())
+    
+    return "/"
 }
 
 public class CommandPath {
@@ -334,7 +324,7 @@ public class CommandPath {
         #if targetEnvironment(macCatalyst)
         return "/opt/procursus"
         #else
-        return getRootPath()
+        return String(rootPath().dropLast())
         #endif
     }()
 
